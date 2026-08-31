@@ -4,14 +4,14 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PidFile = Join-Path $ScriptDir "monitor.pid"
 
 if (Test-Path $PidFile) {
-    $pid = Get-Content $PidFile -ErrorAction SilentlyContinue
-    if ($pid) {
-        $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    $monitorPid = Get-Content $PidFile -ErrorAction SilentlyContinue
+    if ($monitorPid) {
+        $proc = Get-Process -Id $monitorPid -ErrorAction SilentlyContinue
         if ($proc) {
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Write-Host "Process stopped (PID $pid)" -ForegroundColor Green
+            Stop-Process -Id $monitorPid -Force -ErrorAction SilentlyContinue
+            Write-Host "Process stopped (PID $monitorPid)" -ForegroundColor Green
         } else {
-            Write-Host "Process $pid already not running" -ForegroundColor Yellow
+            Write-Host "Process $monitorPid already not running" -ForegroundColor Yellow
         }
     }
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue

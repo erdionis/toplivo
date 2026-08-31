@@ -120,9 +120,11 @@ def tb_normalize(station: dict) -> dict:
 
     last_tx = station.get("lastTransactionAt")
     minutes_ago = None
+    last_tx_msk = None
     if last_tx:
         tx_time = datetime.fromisoformat(last_tx.replace("Z", "+00:00"))
         minutes_ago = int((datetime.now(timezone.utc) - tx_time).total_seconds() / 60)
+        last_tx_msk = tx_time.astimezone(MSK)
 
     confidence = station.get("confidence", 0) * 100
 
@@ -136,7 +138,7 @@ def tb_normalize(station: dict) -> dict:
         "ai95_status": ai95,
         "has_fuel": has_fuel,
         "minutes_ago": minutes_ago,
-        "last_transaction": last_tx,
+        "last_transaction": last_tx_msk,
         "fuel_detail": fuel,
     }
 
@@ -234,12 +236,14 @@ def sber_normalize(station: dict, details: dict | None) -> dict:
 
     last_payment = details.get("lastPaymentAt")
     minutes_ago = None
+    last_tx_msk = None
     if last_payment:
         try:
             payment_time = datetime.fromisoformat(last_payment)
             if payment_time.tzinfo is None:
                 payment_time = payment_time.replace(tzinfo=MSK)
             minutes_ago = int((datetime.now(timezone.utc) - payment_time).total_seconds() / 60)
+            last_tx_msk = payment_time.astimezone(MSK)
         except (ValueError, TypeError):
             pass
 
@@ -256,7 +260,7 @@ def sber_normalize(station: dict, details: dict | None) -> dict:
         "ai95_status": ai95,
         "has_fuel": has_fuel,
         "minutes_ago": minutes_ago,
-        "last_transaction": last_payment,
+        "last_transaction": last_tx_msk,
         "fuel_detail": {f["type"]: f.get("availabilityStatus", "no_data") for f in fuels},
     }
 
@@ -292,6 +296,10 @@ def extract_address_key(addr: str) -> str:
     """Извлекает ключевой элемент адреса для нечёткого сравнения."""
     import re
     norm = normalize_address(addr)
+    # Убираем "краснодар" и подобные из ключа
+    for city in ("краснодара", "краснодар", "краснодарский"):
+        norm = norm.replace(city, "")
+    norm = ' '.join(norm.split())
     # Ищем числовой номер в конце
     match = re.search(r'(\d+[\-/]?\d*)\s*$', norm)
     if match:
@@ -342,6 +350,7 @@ def find_matches(tb_stations: list[dict], sber_stations: list[dict]) -> tuple[li
                 "ai95_status": _merge_ai95(tb_s["ai95_status"], sber_s["ai95_status"]),
                 "has_fuel": tb_s["has_fuel"] or sber_s["has_fuel"],
                 "minutes_ago": _min_minutes(tb_s["minutes_ago"], sber_s["minutes_ago"]),
+                "last_transaction": _min_datetime(tb_s["last_transaction"], sber_s["last_transaction"]),
                 "source_tb": tb_s,
                 "source_sber": sber_s,
             }
@@ -375,6 +384,15 @@ def _min_minutes(a: int | None, b: int | None) -> int | None:
     return min(a, b)
 
 
+def _min_datetime(a: datetime | None, b: datetime | None) -> datetime | None:
+    """Минимальная дата из двух (ближайшая покупка)."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return min(a, b)
+
+
 # ============================================================
 # Генерация отчёта
 # ============================================================
@@ -394,11 +412,13 @@ def ai95_icon(status: str) -> str:
     return mapping.get(status, "?")
 
 
-def format_minutes(minutes: int | None) -> str:
-    """Форматирование минут назад."""
-    if minutes is None:
+def format_datetime(dt: datetime | None) -> str:
+    """Форматирование даты-времени МСК."""
+    if dt is None:
         return "—"
-    return str(minutes)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=MSK)
+    return dt.astimezone(MSK).strftime("%d.%m %H:%M")
 
 
 def generate_unified_report(
@@ -425,12 +445,12 @@ def generate_unified_report(
     lines.append("## Пересечение (оба источника подтверждают)")
     lines.append("")
     if matches:
-        lines.append("| # | Название | Бренд | Адрес | Уверенность | АИ-95 | Покупка (МСК) мин. назад |")
-        lines.append("|---|---------|-------|-------|-------------|-------|--------------------------|")
+        lines.append("| # | Название | Адрес | Уверенность | АИ-95 | Покупка (МСК) |")
+        lines.append("|---|---------|-------|-------|-------|-------|")
         for i, s in enumerate(matches, 1):
             addr_short = s["address"].replace("Россия, ", "")
             lines.append(
-                f"| {i} | {s['name']} | {s['brand']} | {addr_short} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_minutes(s['minutes_ago'])} |"
+                f"| {i} | {s['name']} | {addr_short} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} |"
             )
     else:
         lines.append("_Нет заправок, найденных в обоих источниках._")
@@ -440,12 +460,12 @@ def generate_unified_report(
     lines.append("## Только toplivo.tbank.ru")
     lines.append("")
     if tb_only:
-        lines.append("| # | Название | Бренд | Адрес | Уверенность | АИ-95 | Покупка (МСК) мин. назад |")
-        lines.append("|---|---------|-------|-------|-------------|-------|--------------------------|")
+        lines.append("| # | Название | Адрес | Уверенность | АИ-95 | Покупка (МСК) |")
+        lines.append("|---|---------|-------|-------|-------|-------|")
         for i, s in enumerate(tb_only, 1):
             addr_short = s["address"].replace("Россия, ", "")
             lines.append(
-                f"| {i} | {s['name']} | {s['brand']} | {addr_short} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_minutes(s['minutes_ago'])} |"
+                f"| {i} | {s['name']} | {addr_short} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} |"
             )
     else:
         lines.append("_Нет заправок только из этого источника._")
@@ -455,12 +475,12 @@ def generate_unified_report(
     lines.append("## Только sberazs.ru")
     lines.append("")
     if sber_only:
-        lines.append("| # | Название | Адрес | Уверенность | АИ-95 | Покупка (МСК) мин. назад |")
-        lines.append("|---|---------|-------|-------------|-------|--------------------------|")
+        lines.append("| # | Название | Адрес | Уверенность | АИ-95 | Покупка (МСК) |")
+        lines.append("|---|---------|-------|-------|-------|")
         for i, s in enumerate(sber_only, 1):
             addr_short = s["address"].replace("Краснодарский край, ", "")
             lines.append(
-                f"| {i} | {s['name']} | {addr_short} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_minutes(s['minutes_ago'])} |"
+                f"| {i} | {s['name']} | {addr_short} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} |"
             )
     else:
         lines.append("_Нет заправок только из этого источника._")
@@ -572,7 +592,7 @@ def run_once():
     output_dir = Path(__file__).parent / "reports"
     output_dir.mkdir(exist_ok=True)
 
-    filename = f"monitor_{now.strftime('%Y%m%d_%H%M%S')}.md"
+    filename = f"monitor_{datetime.now(MSK).strftime('%Y%m%d_%H%M%S')}.md"
     filepath = output_dir / filename
     filepath.write_text(report, encoding="utf-8")
     print(f"\nОтчёт сохранён: {filepath}")
@@ -597,9 +617,12 @@ def git_commit_and_push(filepath: Path):
             print("Git: не git репозиторий, пропускаю")
             return
 
+        # Получаем относительный путь файла
+        rel_path = filepath.relative_to(repo_dir)
+
         # Добавляем файл
         subprocess.run(
-            ["git", "add", str(filepath.name)],
+            ["git", "add", str(rel_path)],
             cwd=repo_dir, capture_output=True, text=True
         )
 
