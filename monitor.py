@@ -476,7 +476,7 @@ def generate_unified_report(
     lines.append("")
     if sber_only:
         lines.append("| # | Название | Адрес | Уверенность | АИ-95 | Покупка (МСК) |")
-        lines.append("|---|---------|-------|-------|-------|")
+        lines.append("|---|---------|-------|-------|-------|-------|")
         for i, s in enumerate(sber_only, 1):
             addr_short = s["address"].replace("Краснодарский край, ", "")
             lines.append(
