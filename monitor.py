@@ -60,17 +60,20 @@ def format_telegram_message(matches: list, filepath: Path) -> str:
             last_tx = s.get("last_transaction")
             tx_str = format_datetime(last_tx) if last_tx else "—"
 
-            # Инфо от gdebenz
-            gb_info = ""
+            # Уверенность из gdebenz (если есть)
+            gb_conf = ""
+            if s.get("gb_confidence") and s["gb_confidence"] > 0:
+                gb_conf = f" | 📊 {s['gb_confidence']:.0f}%"
+
+            # Очередь от gdebenz
+            gb_queue = ""
             if s.get("gb_queue_info"):
-                gb_info = f" | 🚗 {s['gb_queue_info']}"
+                gb_queue = f" | 🚗 {s['gb_queue_info']}"
             elif s.get("gb_crowd"):
-                gb_info = f" | 🚗 {s['gb_crowd']}"
-            elif s.get("gb_confidence") and s["gb_confidence"] > 0:
-                gb_info = f" | 🚗 gdebenz {s['gb_confidence']:.0f}%"
+                gb_queue = f" | 🚗 {s['gb_crowd']}"
 
             lines.append(f"{i}. <b>{name}</b> — {addr}")
-            lines.append(f"   📍 <a href=\"{url}\">Маршрут</a> | 🕐 {tx_str}{gb_info}")
+            lines.append(f"   📍 <a href=\"{url}\">Маршрут</a> | 🕐 {tx_str}{gb_conf}{gb_queue}")
             lines.append("")  # пустая строка между пунктами
     else:
         lines.append("_Нет пересечений._")
@@ -823,10 +826,9 @@ def find_matches_with_gb(
 ) -> tuple[list, list, list, list]:
     """
     Поиск пересечений между ТБ, Сбер и gdebenz.
-    Пересечение = минимум 2 из 3 источников подтвердили:
-      1) наличие АИ-95 (has_fuel или ai95_status available/maybe_available)
-      2) свежую отметку (minutes_ago <= LIMIT_MINUTES)
-    Возвращает: (all_match, tb_only, sber_only, gb_only)
+    Пересечение = минимум 2 из 3 источников подтвердили наличие АИ-95.
+    Исходные списки НЕ редактируются — все станции остаются в своих таблицах.
+    Возвращает: (all_match, tb_all, sber_all, gb_all)
     """
     COORD_THRESHOLD = 0.003  # ~300м
 
@@ -875,53 +877,26 @@ def find_matches_with_gb(
 
         clusters.append(cluster)
 
-    # Объединение кластеров в единый отчёт
+    # Определяем пересечения
     result_matches = []
-    tb_only = []
-    sber_only = []
-    gb_only = []
 
     for cluster in clusters:
         srcs = set(s["_src"] for s in cluster)
 
         if len(srcs) >= 2:
-            # Проверяем условия пересечения: минимум 2 источника с 95-м и свежей отметкой
+            # Проверяем условия пересечения: минимум 2 источника с 95-м
             sources_with_fuel = 0
-            sources_with_recent = 0
             for s in cluster:
-                # Проверка наличия АИ-95
                 ai95 = s.get("ai95_status", "no_data")
                 if ai95 in ("available", "maybe_available") or s.get("has_fuel", False):
                     sources_with_fuel += 1
-                # Проверка свежей отметки
-                mins = s.get("minutes_ago")
-                if mins is not None and mins <= LIMIT_MINUTES:
-                    sources_with_recent += 1
 
-            if sources_with_fuel >= 2 and sources_with_recent >= 1:
-                # Пересечение — объединяем данные
+            if sources_with_fuel >= 2:
                 merged = _merge_cluster(cluster)
                 result_matches.append(merged)
-            else:
-                # Не прошли фильтр — разбиваем по источникам
-                for s in cluster:
-                    if s["_src"] == "tb":
-                        tb_only.append(s)
-                    elif s["_src"] == "sber":
-                        sber_only.append(s)
-                    else:
-                        gb_only.append(s)
-        else:
-            # Только один источник
-            s = cluster[0]
-            if s["_src"] == "tb":
-                tb_only.append(s)
-            elif s["_src"] == "sber":
-                sber_only.append(s)
-            else:
-                gb_only.append(s)
 
-    return result_matches, tb_only, sber_only, gb_only
+    # Исходные списки остаются БЕЗ ИЗМЕНЕНИЙ
+    return result_matches, tb_stations, sber_stations, gb_stations
 
 
 def _merge_two_stations(s1: dict, s2: dict, src1: str, src2: str) -> dict:
@@ -964,10 +939,16 @@ def _merge_cluster(cluster: list[dict]) -> dict:
     result = cluster[0].copy()
     result["sources"] = [s.get("_src", "?") for s in cluster]
 
+    # Уверенность: TB/Sber в приоритете, gdebenz только если нет других
+    tb_sber = [s for s in cluster if s.get("_src") in ("tb", "sber")]
+    if tb_sber:
+        result["confidence"] = max(s.get("confidence", 0) for s in tb_sber)
+    else:
+        result["confidence"] = max(s.get("confidence", 0) for s in cluster)
+
     for s in cluster[1:]:
         result["name"] = _unify_brand_name(result.get("name", ""), result, s)
         result["address"] = s.get("address", result.get("address", "—")) if s.get("address", "—") not in ("—", "") else result.get("address", "—")
-        result["confidence"] = max(result.get("confidence", 0), s.get("confidence", 0))
         result["ai95_status"] = _merge_ai95(result.get("ai95_status", "no_data"), s.get("ai95_status", "no_data"))
         result["has_fuel"] = result.get("has_fuel", False) or s.get("has_fuel", False)
         result["minutes_ago"] = _min_minutes(result.get("minutes_ago"), s.get("minutes_ago"))
@@ -1119,19 +1100,26 @@ def generate_unified_report(
         for i, s in enumerate(matches, 1):
             addr_short = s["address"].replace("Россия, ", "")
             sources = "+".join(s.get("sources", []))
-            if s.get("gb_source"):
-                sources += "+gb"
             link = yandex_maps_link(s.get("lat"), s.get("lon"))
-            # Инфо от gdebenz
+            # Инфо от gdebenz: очередь + Уверенность gdebenz
             gb_info = ""
             if s.get("gb_queue_info"):
                 gb_info = s["gb_queue_info"]
             elif s.get("gb_crowd"):
                 gb_info = s["gb_crowd"]
-            elif s.get("gb_confidence"):
-                gb_info = f"{s['gb_confidence']:.0f}%"
+            # Уверенность gdebenz отдельно
+            gb_conf = ""
+            if s.get("gb_confidence") and s["gb_confidence"] > 0:
+                gb_conf = f"{s['gb_confidence']:.0f}%"
+            gb_display = ""
+            if gb_info and gb_conf:
+                gb_display = f"{gb_info} ({gb_conf})"
+            elif gb_info:
+                gb_display = gb_info
+            elif gb_conf:
+                gb_display = gb_conf
             lines.append(
-                f"| {i} | {s['name']} | {addr_short} | {sources} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} | {gb_info} | {link} |"
+                f"| {i} | {s['name']} | {addr_short} | {sources} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} | {gb_display} | {link} |"
             )
     else:
         lines.append("_Нет заправок, найденных в нескольких источниках._")
