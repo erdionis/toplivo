@@ -114,7 +114,7 @@ def send_telegram(message: str) -> bool:
 # Общие настройки
 # ============================================================
 
-LIMIT_MINUTES = 30
+LIMIT_MINUTES = 45
 MSK = timezone(timedelta(hours=3))
 
 # 5 отслеживаемых заправок вне Краснодара
