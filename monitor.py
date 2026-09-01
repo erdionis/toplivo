@@ -48,6 +48,17 @@ def yandex_maps_url(address: str) -> str:
     return f"https://yandex.ru/maps/?text={query}"
 
 
+def short_address(addr: str) -> str:
+    """Сокращение адреса для Краснодара: убрать 'Краснодарский край, Краснодар,' и 'Краснодар, '."""
+    if not addr:
+        return addr
+    import re
+    # Убираем префиксы Краснодара
+    addr = re.sub(r'^Краснодарский край,\s*Краснодар,\s*', '', addr)
+    addr = re.sub(r'^Краснодар,\s*', '', addr)
+    return addr
+
+
 def format_telegram_message(matches: list, filepath: Path) -> str:
     """Форматирование сообщения для Telegram."""
     lines = ["⛽ <b>Пересечение</b> (2+ источника):", ""]
@@ -72,7 +83,7 @@ def format_telegram_message(matches: list, filepath: Path) -> str:
             elif s.get("gb_crowd"):
                 gb_queue = f" | 🚗 {s['gb_crowd']}"
 
-            lines.append(f"{i}. <b>{name}</b> — {addr}")
+            lines.append(f"{i}. <b>{name}</b> — {short_address(addr)}")
             lines.append(f"   📍 <a href=\"{url}\">Маршрут</a> | 🕐 {tx_str}{gb_conf}{gb_queue}")
             lines.append("")  # пустая строка между пунктами
     else:
