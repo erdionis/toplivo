@@ -117,7 +117,8 @@ def send_telegram(message: str) -> bool:
 # Общие настройки
 # ============================================================
 
-LIMIT_MINUTES = 45
+LIMIT_MINUTES = 45  # TB и Sber: покупка за 45 минут
+GB_LIMIT_MINUTES = 240  # gdebenz: отметка за 4 часа (пользователи)
 MSK = timezone(timedelta(hours=3))
 
 # 5 отслеживаемых заправок вне Краснодара
@@ -1082,7 +1083,7 @@ def generate_unified_report(
         "",
         f"**Дата:** {now_msk.strftime('%d.%m.%Y %H:%M:%S')} МСК",
         f"**Источники:** toplivo.tbank.ru + sberazs.ru + gdebenz.ru",
-        f"**Окно:** покупка за {LIMIT_MINUTES} минут",
+        f"**Окно:** покупка за {LIMIT_MINUTES} мин (TB/Sber), отметка за {GB_LIMIT_MINUTES // 60} ч (gdebenz)",
         f"**Найдено:** {total} заправок",
         f"  - Пересечение (2+ источника): {len(matches)}",
         f"  - Только Т-Банк: {len(tb_only)}",
@@ -1306,7 +1307,7 @@ def run_once():
             s for s in gb_stations
             if s["has_fuel"]
             and s["minutes_ago"] is not None
-            and s["minutes_ago"] <= LIMIT_MINUTES
+            and s["minutes_ago"] <= GB_LIMIT_MINUTES
         ]
         print(f"  Краснодар: {len(gb_stations)} АЗС, с фильтром: {len(gb_filtered)}")
 
