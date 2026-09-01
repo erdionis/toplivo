@@ -803,6 +803,13 @@ def _enrich_matches_with_gb(matches: list[dict], gb_stations: list[dict]) -> Non
             match["gb_queue_info"] = fuel_detail.get("queue", "")
 
 
+def _addresses_match(addr1: str, addr2: str) -> bool:
+    """Проверка совпадения адресов."""
+    key1 = extract_address_key(addr1)
+    key2 = extract_address_key(addr2)
+    return key1 and key2 and key1 == key2
+
+
 def find_matches_with_gb(
     tb_stations: list[dict],
     sber_stations: list[dict],
@@ -1302,7 +1309,14 @@ def run_once():
     all_gb = list(gb_filtered) + list(gb_tracked_filtered)
     _enrich_matches_with_gb(matches, all_gb)
 
-    report = generate_unified_report(matches, tb_only, sber_only, now, [], [])
+    # Фильтруем gdebenz только для станций без пересечений с TB+Sber
+    gb_only = [s for s in all_gb if not any(
+        _addresses_match(s.get("address", ""), m.get("address", ""))
+        for m in matches
+    )]
+    print(f"  Только gdebenz: {len(gb_only)}")
+
+    report = generate_unified_report(matches, tb_only, sber_only, now, gb_only, [])
 
     # Сохранение
     output_dir = Path(__file__).resolve().parent / "reports"
