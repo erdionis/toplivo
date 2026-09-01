@@ -1,9 +1,7 @@
 name: Fuel Monitor
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'  # каждые 30 минут
-  workflow_dispatch:  # ручной запуск
+  workflow_dispatch:  # только ручной запуск
 
 permissions:
   contents: write
