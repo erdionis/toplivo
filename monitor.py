@@ -823,8 +823,10 @@ def find_matches_with_gb(
 ) -> tuple[list, list, list, list]:
     """
     Поиск пересечений между ТБ, Сбер и gdebenz.
+    Пересечение = минимум 2 из 3 источников подтвердили:
+      1) наличие АИ-95 (has_fuel или ai95_status available/maybe_available)
+      2) свежую отметку (minutes_ago <= LIMIT_MINUTES)
     Возвращает: (all_match, tb_only, sber_only, gb_only)
-    all_match — станции, найденные в 2+ источниках.
     """
     COORD_THRESHOLD = 0.003  # ~300м
 
@@ -881,10 +883,34 @@ def find_matches_with_gb(
 
     for cluster in clusters:
         srcs = set(s["_src"] for s in cluster)
+
         if len(srcs) >= 2:
-            # Пересечение — объединяем данные
-            merged = _merge_cluster(cluster)
-            result_matches.append(merged)
+            # Проверяем условия пересечения: минимум 2 источника с 95-м и свежей отметкой
+            sources_with_fuel = 0
+            sources_with_recent = 0
+            for s in cluster:
+                # Проверка наличия АИ-95
+                ai95 = s.get("ai95_status", "no_data")
+                if ai95 in ("available", "maybe_available") or s.get("has_fuel", False):
+                    sources_with_fuel += 1
+                # Проверка свежей отметки
+                mins = s.get("minutes_ago")
+                if mins is not None and mins <= LIMIT_MINUTES:
+                    sources_with_recent += 1
+
+            if sources_with_fuel >= 2 and sources_with_recent >= 2:
+                # Пересечение — объединяем данные
+                merged = _merge_cluster(cluster)
+                result_matches.append(merged)
+            else:
+                # Не прошли фильтр — разбиваем по источникам
+                for s in cluster:
+                    if s["_src"] == "tb":
+                        tb_only.append(s)
+                    elif s["_src"] == "sber":
+                        sber_only.append(s)
+                    else:
+                        gb_only.append(s)
         else:
             # Только один источник
             s = cluster[0]
