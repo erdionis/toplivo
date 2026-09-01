@@ -1328,6 +1328,10 @@ def run_once():
     # Пересечение: любые 2+ из 3 источников
     all_gb = list(gb_filtered) + list(gb_tracked_filtered)
     matches, tb_only, sber_only, gb_only = find_matches_with_gb(tb_filtered, sber_filtered, all_gb)
+    
+    # Обогащение пересечений данными gdebenz (очередь, статус, Уверенность)
+    _enrich_matches_with_gb(matches, all_gb)
+    
     print(f"  Пересечение (2+ источника): {len(matches)}")
     print(f"  Только Т-Банк: {len(tb_only)}")
     print(f"  Только Сбер: {len(sber_only)}")
