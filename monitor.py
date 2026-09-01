@@ -50,7 +50,7 @@ def yandex_maps_url(address: str) -> str:
 
 def format_telegram_message(matches: list, filepath: Path) -> str:
     """Форматирование сообщения для Telegram."""
-    lines = ["⛽ <b>Пересечение</b> TB + Sber:", ""]
+    lines = ["⛽ <b>Пересечение</b> (2+ источника):", ""]
 
     if matches:
         for i, s in enumerate(matches, 1):
@@ -1111,7 +1111,7 @@ def generate_unified_report(
     ]
 
     # --- Таблица 1: Пересечение ---
-    lines.append("## Пересечение (TB + Sber)")
+    lines.append("## Пересечение (2+ источника)")
     lines.append("")
     if matches:
         lines.append("| # | Название | Адрес | Источники | Уверенность | АИ-95 | Покупка (МСК) | gdebenz | Маршрут |")
@@ -1338,7 +1338,7 @@ def run_once():
     print("\n--- Сопоставление ---")
     # Пересечение: TB + Sber
     matches, tb_only, sber_only = find_matches(tb_filtered, sber_filtered)
-    print(f"  Пересечение TB+Sber: {len(matches)}")
+    print(f"  Пересечение (2+ источника): {len(matches)}")
     print(f"  Только Т-Банк: {len(tb_only)}")
     print(f"  Только Сбер: {len(sber_only)}")
 
