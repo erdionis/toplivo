@@ -1307,14 +1307,12 @@ def run_once():
         except Exception as e:
             print(f"  Ошибка {tracked['name']}: {e}")
 
-    # Фильтрация: покупка за 45 мин + есть бензин (или есть данные из поиска)
+    # Фильтрация: покупка за 45 мин + есть бензин
     sber_filtered = [
         s for s in sber_all.values()
         if s["has_fuel"]
-        and (
-            (s["minutes_ago"] is not None and s["minutes_ago"] <= LIMIT_MINUTES)
-            or s.get("ai95_status") == "unknown"  # есть данные из поиска, details не загрузились
-        )
+        and s["minutes_ago"] is not None
+        and s["minutes_ago"] <= LIMIT_MINUTES
     ]
     print(f"  Итого Сбер (с фильтром): {len(sber_filtered)}")
 
