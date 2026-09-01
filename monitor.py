@@ -949,7 +949,7 @@ def _merge_two_stations(s1: dict, s2: dict, src1: str, src2: str) -> dict:
         "ai95_status": _merge_ai95(s1.get("ai95_status", "no_data"), s2.get("ai95_status", "no_data")),
         "has_fuel": s1.get("has_fuel", False) or s2.get("has_fuel", False),
         "minutes_ago": _min_minutes(s1.get("minutes_ago"), s2.get("minutes_ago")),
-        "last_transaction": _min_datetime(s1.get("last_transaction"), s2.get("last_transaction")),
+        "last_transaction": _max_datetime(s1.get("last_transaction"), s2.get("last_transaction")),
         "sources": [s1.get("_src", src1), s2.get("_src", src2)],
         "lat": s1.get("lat") or s2.get("lat"),
         "lon": s1.get("lon") or s2.get("lon"),
@@ -978,7 +978,7 @@ def _merge_cluster(cluster: list[dict]) -> dict:
         result["ai95_status"] = _merge_ai95(result.get("ai95_status", "no_data"), s.get("ai95_status", "no_data"))
         result["has_fuel"] = result.get("has_fuel", False) or s.get("has_fuel", False)
         result["minutes_ago"] = _min_minutes(result.get("minutes_ago"), s.get("minutes_ago"))
-        result["last_transaction"] = _min_datetime(result.get("last_transaction"), s.get("last_transaction"))
+        result["last_transaction"] = _max_datetime(result.get("last_transaction"), s.get("last_transaction"))
         if not result.get("lat") and s.get("lat"):
             result["lat"] = s.get("lat")
         if not result.get("lon") and s.get("lon"):
@@ -1054,6 +1054,15 @@ def _min_datetime(a: datetime | None, b: datetime | None) -> datetime | None:
     if b is None:
         return a
     return min(a, b)
+
+
+def _max_datetime(a: datetime | None, b: datetime | None) -> datetime | None:
+    """Максимальная дата из двух (самая свежая покупка)."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return max(a, b)
 
 
 # ============================================================
