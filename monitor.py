@@ -20,6 +20,83 @@ import requests
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Загрузка .env
+def load_env():
+    env_file = Path(__file__).parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                import os
+                os.environ[key.strip()] = value.strip()
+
+load_env()
+
+TELEGRAM_BOT_TOKEN = __import__("os").environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = __import__("os").environ.get("TELEGRAM_CHAT_ID", "")
+
+
+# ============================================================
+# Telegram
+# ============================================================
+
+
+def yandex_maps_url(address: str) -> str:
+    """Генерация ссылки на Яндекс.Карты."""
+    import urllib.parse
+    query = urllib.parse.quote(address)
+    return f"https://yandex.ru/maps/?text={query}"
+
+
+def format_telegram_message(matches: list, filepath: Path) -> str:
+    """Форматирование сообщения для Telegram."""
+    lines = ["⛽ <b>Пересечение</b> (оба источника подтверждают):", ""]
+
+    if matches:
+        for i, s in enumerate(matches, 1):
+            addr = s.get("address", "—")
+            name = s.get("name", "—")
+            url = yandex_maps_url(addr)
+            lines.append(f"{i}. <b>{name}</b> — {addr}")
+            lines.append(f"   📍 <a href=\"{url}\">Маршрут</a>")
+    else:
+        lines.append("_Нет пересечений._")
+
+    lines.append("")
+    report_url = f"https://github.com/erdionis/toplivo/blob/main/reports/{filepath.name}"
+    lines.append(f"📄 <a href=\"{report_url}\">Детали отчёта</a>")
+
+    return "\n".join(lines)
+
+
+def send_telegram(message: str) -> bool:
+    """Отправка сообщения в Telegram."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram: токен или chat_id не заданы, пропускаю")
+        return False
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    data = json.dumps({
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            if result.get("ok"):
+                print("Telegram: сообщение отправлено")
+                return True
+            else:
+                print(f"Telegram ошибка: {result.get('description', 'unknown')}")
+                return False
+    except Exception as e:
+        print(f"Telegram ошибка: {e}")
+        return False
+
 # ============================================================
 # Общие настройки
 # ============================================================
@@ -1168,6 +1245,10 @@ def run_once():
     filepath = output_dir / filename
     filepath.write_text(report, encoding="utf-8")
     print(f"\nОтчёт сохранён: {filepath}")
+
+    # Отправка в Telegram
+    tg_msg = format_telegram_message(matches, filepath)
+    send_telegram(tg_msg)
 
     # Git commit and push
     git_commit_and_push(filepath)
