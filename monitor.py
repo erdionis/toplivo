@@ -1016,6 +1016,26 @@ def generate_unified_report(
 # ============================================================
 
 
+def move_old_reports_to_history(output_dir: Path):
+    """Перемещение старых отчётов в подкаталог history."""
+    history_dir = output_dir / "history"
+    history_dir.mkdir(exist_ok=True)
+
+    # Находим все .md файлы в reports (не в history)
+    reports = sorted(
+        [f for f in output_dir.iterdir() if f.suffix == ".md"],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+
+    # Оставляем только最新的, остальные перемещаем
+    if len(reports) > 1:
+        for old_file in reports[1:]:
+            dest = history_dir / old_file.name
+            old_file.rename(dest)
+            print(f"  Перемещён в history: {old_file.name}")
+
+
 def run_once():
     """Один цикл сбора данных."""
     now = datetime.now(timezone.utc)
@@ -1140,6 +1160,9 @@ def run_once():
     # Сохранение
     output_dir = Path(__file__).parent / "reports"
     output_dir.mkdir(exist_ok=True)
+
+    # Перемещаем старые отчёты в history
+    move_old_reports_to_history(output_dir)
 
     filename = f"monitor_{datetime.now(MSK).strftime('%Y%m%d_%H%M%S')}.md"
     filepath = output_dir / filename
