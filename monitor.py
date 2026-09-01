@@ -50,15 +50,26 @@ def yandex_maps_url(address: str) -> str:
 
 def format_telegram_message(matches: list, filepath: Path) -> str:
     """Форматирование сообщения для Telegram."""
-    lines = ["⛽ <b>Пересечение</b> (оба источника подтверждают):", ""]
+    lines = ["⛽ <b>Пересечение</b> TB + Sber:", ""]
 
     if matches:
         for i, s in enumerate(matches, 1):
             addr = s.get("address", "—")
             name = s.get("name", "—")
             url = yandex_maps_url(addr)
+            last_tx = s.get("last_transaction")
+            tx_str = format_datetime(last_tx) if last_tx else "—"
+
+            # Доп. инфо от gdebenz
+            gb_info = ""
+            if s.get("gb_queue"):
+                gb_info = f" | 🚗 Очередь: {s['gb_queue']}"
+            elif s.get("gb_crowd"):
+                gb_info = f" | 🚗 {s['gb_crowd']}"
+
             lines.append(f"{i}. <b>{name}</b> — {addr}")
-            lines.append(f"   📍 <a href=\"{url}\">Маршрут</a>")
+            lines.append(f"   📍 <a href=\"{url}\">Маршрут</a> | 🕐 {tx_str}{gb_info}")
+            lines.append("")  # пустая строка между пунктами
     else:
         lines.append("_Нет пересечений._")
 
@@ -747,6 +758,43 @@ def find_matches(tb_stations: list[dict], sber_stations: list[dict]) -> tuple[li
     return matches, tb_only, sber_only
 
 
+def _enrich_matches_with_gb(matches: list[dict], gb_stations: list[dict]) -> None:
+    """Обогащение пересечений данными gdebenz (очередь, статус)."""
+    COORD_THRESHOLD = 0.003
+
+    for match in matches:
+        lat = match.get("lat", 0)
+        lon = match.get("lon", 0)
+        addr_key = extract_address_key(match.get("address", ""))
+
+        best_gb = None
+        best_dist = COORD_THRESHOLD
+
+        for gb_s in gb_stations:
+            gb_lat = gb_s.get("lat", 0)
+            gb_lon = gb_s.get("lon", 0)
+
+            # По координатам
+            if lat and lon and gb_lat and gb_lon:
+                dist = ((lat - gb_lat) ** 2 + (lon - gb_lon) ** 2) ** 0.5
+                if dist < best_dist:
+                    best_dist = dist
+                    best_gb = gb_s
+                continue
+
+            # По адресу
+            gb_key = extract_address_key(gb_s.get("address", ""))
+            if addr_key and gb_key and addr_key == gb_key:
+                best_gb = gb_s
+                break
+
+        if best_gb:
+            match["gb_crowd"] = best_gb.get("crowd")
+            match["gb_crowd_raw"] = best_gb.get("crowd_raw")
+            match["gb_queue"] = best_gb.get("queue")
+            match["gb_source"] = "gdebenz"
+
+
 def find_matches_with_gb(
     tb_stations: list[dict],
     sber_stations: list[dict],
@@ -1224,15 +1272,17 @@ def run_once():
 
     # --- 4. Сопоставление и генерация отчёта ---
     print("\n--- Сопоставление ---")
-    # Объединяем gdebenz станции для кластеризации
-    all_gb = list(gb_filtered) + list(gb_tracked_filtered)
-    matches, tb_only, sber_only, gb_only = find_matches_with_gb(tb_filtered, sber_filtered, all_gb)
-    print(f"  Пересечение: {len(matches)}")
+    # Пересечение: TB + Sber
+    matches, tb_only, sber_only = find_matches(tb_filtered, sber_filtered)
+    print(f"  Пересечение TB+Sber: {len(matches)}")
     print(f"  Только Т-Банк: {len(tb_only)}")
     print(f"  Только Сбер: {len(sber_only)}")
-    print(f"  Только gdebenz: {len(gb_only)}")
 
-    report = generate_unified_report(matches, tb_only, sber_only, now, gb_only, [])
+    # Обогащение пересечений данными gdebenz (очередь, статус)
+    all_gb = list(gb_filtered) + list(gb_tracked_filtered)
+    _enrich_matches_with_gb(matches, all_gb)
+
+    report = generate_unified_report(matches, tb_only, sber_only, now, [], [])
 
     # Сохранение
     output_dir = Path(__file__).parent / "reports"
