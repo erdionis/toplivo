@@ -1336,21 +1336,12 @@ def run_once():
 
     # --- 4. Сопоставление и генерация отчёта ---
     print("\n--- Сопоставление ---")
-    # Пересечение: TB + Sber
-    matches, tb_only, sber_only = find_matches(tb_filtered, sber_filtered)
+    # Пересечение: любые 2+ из 3 источников
+    all_gb = list(gb_filtered) + list(gb_tracked_filtered)
+    matches, tb_only, sber_only, gb_only = find_matches_with_gb(tb_filtered, sber_filtered, all_gb)
     print(f"  Пересечение (2+ источника): {len(matches)}")
     print(f"  Только Т-Банк: {len(tb_only)}")
     print(f"  Только Сбер: {len(sber_only)}")
-
-    # Обогащение пересечений данными gdebenz (очередь, статус)
-    all_gb = list(gb_filtered) + list(gb_tracked_filtered)
-    _enrich_matches_with_gb(matches, all_gb)
-
-    # Фильтруем gdebenz только для станций без пересечений с TB+Sber
-    gb_only = [s for s in all_gb if not any(
-        _addresses_match(s.get("address", ""), m.get("address", ""))
-        for m in matches
-    )]
     print(f"  Только gdebenz: {len(gb_only)}")
 
     report = generate_unified_report(matches, tb_only, sber_only, now, gb_only, [])
