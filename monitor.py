@@ -66,6 +66,8 @@ def format_telegram_message(matches: list, filepath: Path) -> str:
                 gb_info = f" | 🚗 {s['gb_queue_info']}"
             elif s.get("gb_crowd"):
                 gb_info = f" | 🚗 {s['gb_crowd']}"
+            elif s.get("gb_confidence") and s["gb_confidence"] > 0:
+                gb_info = f" | 🚗 gdebenz {s['gb_confidence']:.0f}%"
 
             lines.append(f"{i}. <b>{name}</b> — {addr}")
             lines.append(f"   📍 <a href=\"{url}\">Маршрут</a> | 🕐 {tx_str}{gb_info}")
