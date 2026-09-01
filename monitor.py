@@ -898,7 +898,7 @@ def find_matches_with_gb(
                 if mins is not None and mins <= LIMIT_MINUTES:
                     sources_with_recent += 1
 
-            if sources_with_fuel >= 2 and sources_with_recent >= 2:
+            if sources_with_fuel >= 2 and sources_with_recent >= 1:
                 # Пересечение — объединяем данные
                 merged = _merge_cluster(cluster)
                 result_matches.append(merged)
