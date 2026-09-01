@@ -330,6 +330,10 @@ def sber_collect_krasnodar(session_id: str) -> dict[str, dict]:
 def sber_normalize(station: dict, details: dict | None) -> dict:
     """Нормализация данных АЗС от СберАЗС в единый формат."""
     if not details:
+        # Используем данные поиска (availabilityStatus, point)
+        avail = station.get("availabilityStatus", "unknown")
+        has_fuel = avail in ("available", "stale")
+        point = station.get("point", {})
         return {
             "source": "sber",
             "id": station.get("id", ""),
@@ -337,11 +341,13 @@ def sber_normalize(station: dict, details: dict | None) -> dict:
             "brand": "—",
             "address": station.get("subtitle", "—"),
             "confidence": 0,
-            "ai95_status": "no_data",
-            "has_fuel": False,
+            "ai95_status": "unknown" if avail in ("available", "stale") else "no_data",
+            "has_fuel": has_fuel,
             "minutes_ago": None,
             "last_transaction": None,
             "fuel_detail": {},
+            "lat": point.get("lat"),
+            "lon": point.get("lon"),
         }
 
     fuels = details.get("fuels", [])
@@ -1241,6 +1247,9 @@ def run_once():
             details = sber_get_station_details(sid, session_id)
             if details:
                 sber_all[sid] = sber_normalize(basic, details)
+            else:
+                # Добавляем даже без деталей — по данным поиска
+                sber_all[sid] = sber_normalize(basic, None)
             time.sleep(0.08)
     except Exception as e:
         print(f"  Ошибка Краснодар: {e}")
@@ -1258,12 +1267,14 @@ def run_once():
         except Exception as e:
             print(f"  Ошибка {tracked['name']}: {e}")
 
-    # Фильтрация: покупка за 30 мин + есть бензин
+    # Фильтрация: покупка за 45 мин + есть бензин (или есть данные из поиска)
     sber_filtered = [
         s for s in sber_all.values()
         if s["has_fuel"]
-        and s["minutes_ago"] is not None
-        and s["minutes_ago"] <= LIMIT_MINUTES
+        and (
+            (s["minutes_ago"] is not None and s["minutes_ago"] <= LIMIT_MINUTES)
+            or s.get("ai95_status") == "unknown"  # есть данные из поиска, details не загрузились
+        )
     ]
     print(f"  Итого Сбер (с фильтром): {len(sber_filtered)}")
 
