@@ -60,10 +60,10 @@ def format_telegram_message(matches: list, filepath: Path) -> str:
             last_tx = s.get("last_transaction")
             tx_str = format_datetime(last_tx) if last_tx else "—"
 
-            # Доп. инфо от gdebenz
+            # Инфо от gdebenz
             gb_info = ""
-            if s.get("gb_queue"):
-                gb_info = f" | 🚗 Очередь: {s['gb_queue']}"
+            if s.get("gb_queue_info"):
+                gb_info = f" | 🚗 {s['gb_queue_info']}"
             elif s.get("gb_crowd"):
                 gb_info = f" | 🚗 {s['gb_crowd']}"
 
@@ -793,6 +793,12 @@ def _enrich_matches_with_gb(matches: list[dict], gb_stations: list[dict]) -> Non
             match["gb_crowd_raw"] = best_gb.get("crowd_raw")
             match["gb_queue"] = best_gb.get("queue")
             match["gb_source"] = "gdebenz"
+            # Доп. данные от gdebenz
+            match["gb_confidence"] = best_gb.get("confidence", 0)
+            match["gb_ai95_status"] = best_gb.get("ai95_status", "no_data")
+            match["gb_last_transaction"] = best_gb.get("last_transaction")
+            fuel_detail = best_gb.get("fuel_detail", {})
+            match["gb_queue_info"] = fuel_detail.get("queue", "")
 
 
 def find_matches_with_gb(
@@ -1064,17 +1070,27 @@ def generate_unified_report(
     ]
 
     # --- Таблица 1: Пересечение ---
-    lines.append("## Пересечение (2+ источника подтверждают)")
+    lines.append("## Пересечение (TB + Sber)")
     lines.append("")
     if matches:
-        lines.append("| # | Название | Адрес | Источники | Уверенность | АИ-95 | Покупка (МСК) | Маршрут |")
-        lines.append("|---|---------|-------|-----------|-------|-------|-------|---------|")
+        lines.append("| # | Название | Адрес | Источники | Уверенность | АИ-95 | Покупка (МСК) | gdebenz | Маршрут |")
+        lines.append("|---|---------|-------|-----------|-------|-------|-------|---------|---------|")
         for i, s in enumerate(matches, 1):
             addr_short = s["address"].replace("Россия, ", "")
             sources = "+".join(s.get("sources", []))
+            if s.get("gb_source"):
+                sources += "+gb"
             link = yandex_maps_link(s.get("lat"), s.get("lon"))
+            # Инфо от gdebenz
+            gb_info = ""
+            if s.get("gb_queue_info"):
+                gb_info = s["gb_queue_info"]
+            elif s.get("gb_crowd"):
+                gb_info = s["gb_crowd"]
+            elif s.get("gb_confidence"):
+                gb_info = f"{s['gb_confidence']:.0f}%"
             lines.append(
-                f"| {i} | {s['name']} | {addr_short} | {sources} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} | {link} |"
+                f"| {i} | {s['name']} | {addr_short} | {sources} | {s['confidence']:.0f}% | {ai95_icon(s['ai95_status'])} | {format_datetime(s['last_transaction'])} | {gb_info} | {link} |"
             )
     else:
         lines.append("_Нет заправок, найденных в нескольких источниках._")
