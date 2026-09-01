@@ -86,32 +86,57 @@ def format_telegram_message(matches: list, filepath: Path) -> str:
 
 
 def send_telegram(message: str) -> bool:
-    """Отправка сообщения в Telegram."""
+    """Отправка сообщения в Telegram (с разбивкой на части при необходимости)."""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("Telegram: токен или chat_id не заданы, пропускаю")
         return False
 
+    MAX_LEN = 4000  # Лимит Telegram (4096, но с запасом)
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = json.dumps({
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True,
-    }).encode("utf-8")
 
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            if result.get("ok"):
-                print("Telegram: сообщение отправлено")
-                return True
+    # Разбиваем на части по лимиту
+    messages = []
+    if len(message) <= MAX_LEN:
+        messages = [message]
+    else:
+        # Разбиваем по станциям (каждая начинается с数字+точка)
+        import re
+        parts = re.split(r'(?=\n\d+\. )', message)
+        current = ""
+        for part in parts:
+            if len(current) + len(part) > MAX_LEN and current:
+                messages.append(current)
+                current = part
             else:
-                print(f"Telegram ошибка: {result.get('description', 'unknown')}")
-                return False
-    except Exception as e:
-        print(f"Telegram ошибка: {e}")
-        return False
+                current += part
+        if current:
+            messages.append(current)
+        print(f"Telegram: сообщение разбито на {len(messages)} частей")
+
+    sent = False
+    for msg in messages:
+        data = json.dumps({
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": msg,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }).encode("utf-8")
+
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                if result.get("ok"):
+                    print(f"Telegram: часть {len(messages)} сообщений отправлена")
+                    sent = True
+                else:
+                    print(f"Telegram ошибка: {result.get('description', 'unknown')}")
+                    return False
+        except Exception as e:
+            print(f"Telegram ошибка: {e}")
+            return False
+
+    return sent
 
 # ============================================================
 # Общие настройки
