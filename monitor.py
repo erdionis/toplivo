@@ -1148,7 +1148,7 @@ def move_old_reports_to_history(output_dir: Path):
 
     # Находим все .md файлы в reports (не в history)
     reports = sorted(
-        [f for f in output_dir.iterdir() if f.suffix == ".md"],
+        [f for f in output_dir.glob("monitor_*.md")],
         key=lambda f: f.stat().st_mtime,
         reverse=True,
     )
@@ -1157,8 +1157,10 @@ def move_old_reports_to_history(output_dir: Path):
     if len(reports) > 1:
         for old_file in reports[1:]:
             dest = history_dir / old_file.name
-            old_file.rename(dest)
-            print(f"  Перемещён в history: {old_file.name}")
+            try:
+                old_file.rename(dest)
+            except Exception:
+                pass
 
 
 def run_once():
@@ -1285,7 +1287,7 @@ def run_once():
     report = generate_unified_report(matches, tb_only, sber_only, now, [], [])
 
     # Сохранение
-    output_dir = Path(__file__).parent / "reports"
+    output_dir = Path(__file__).resolve().parent / "reports"
     output_dir.mkdir(exist_ok=True)
 
     # Перемещаем старые отчёты в history
@@ -1320,12 +1322,9 @@ def git_commit_and_push(filepath: Path):
             print("Git: не git репозиторий, пропускаю")
             return
 
-        # Получаем относительный путь файла
-        rel_path = filepath.relative_to(repo_dir)
-
-        # Добавляем файл
+        # Добавляем все изменения (новый отчёт + перемещённые старые)
         subprocess.run(
-            ["git", "add", str(rel_path)],
+            ["git", "add", "-A"],
             cwd=repo_dir, capture_output=True, text=True
         )
 
