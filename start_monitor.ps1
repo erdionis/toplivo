@@ -3,7 +3,7 @@
 #   -IntervalMinutes - интервал опроса (по умолчанию 30 минут)
 
 param(
-    [int]$IntervalMinutes = 30
+    [int]$IntervalMinutes = 60
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
