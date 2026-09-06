@@ -1436,6 +1436,12 @@ def git_commit_and_push(filepath: Path):
         else:
             print(f"Git: коммит — {commit_msg}")
 
+        # Pull перед push (rebase чтобы не создавать merge коммит)
+        subprocess.run(
+            ["git", "pull", "--rebase"],
+            cwd=repo_dir, capture_output=True, text=True, timeout=30
+        )
+
         # Пушим
         result = subprocess.run(
             ["git", "push"],
