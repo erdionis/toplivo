@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=erdi
-Group=erdi
-WorkingDirectory=/mnt/data/toplivo
-ExecStart=/usr/bin/python3 /mnt/data/toplivo/monitor.py --loop 60
+User=dio
+Group=dio
+WorkingDirectory=/home/dio/project/toplivo
+ExecStart=/usr/bin/python3 /home/dio/project/toplivo/monitor.py --loop 60
 Restart=on-failure
 RestartSec=60
 StandardOutput=journal
