@@ -9,6 +9,8 @@ import time
 import urllib.request
 import urllib.error
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -77,7 +79,7 @@ TB_API_URL = "https://toplivo.tbank.ru/api/v1/stations"
 
 
 def tb_fetch_stations(bounds: dict) -> list[dict]:
-    response = requests.get(TB_API_URL, params=bounds, timeout=15)
+    response = requests.get(TB_API_URL, params=bounds, timeout=15, verify=False)
     response.raise_for_status()
     data = response.json()
     if data.get("status") != "ok":

@@ -17,6 +17,8 @@ import subprocess
 import urllib.request
 import urllib.error
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -250,7 +252,7 @@ TB_API_URL = "https://toplivo.tbank.ru/api/v1/stations"
 
 def tb_fetch_stations(bounds: dict) -> list[dict]:
     """Получение АЗС от Т-Банка по bounding box."""
-    response = requests.get(TB_API_URL, params=bounds, timeout=15)
+    response = requests.get(TB_API_URL, params=bounds, timeout=15, verify=False)
     response.raise_for_status()
     data = response.json()
     if data.get("status") != "ok":
@@ -578,7 +580,7 @@ def gb_enrich_addresses(stations: list[dict]) -> list[dict]:
                 f"?minLat={lat - delta}&maxLat={lat + delta}"
                 f"&minLon={lon - delta}&maxLon={lon + delta}"
             )
-            resp = requests.get(tb_url, timeout=10)
+            resp = requests.get(tb_url, timeout=10, verify=False)
             if resp.status_code == 200:
                 data = resp.json()
                 tb_stations = data.get("payload", [])

@@ -5,6 +5,8 @@
 """
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -62,7 +64,7 @@ REGIONS = [
 
 def fetch_stations(bounds: dict) -> list[dict]:
     """Получение списка АЗС из API по bounding box."""
-    response = requests.get(API_URL, params=bounds, timeout=15)
+    response = requests.get(API_URL, params=bounds, timeout=15, verify=False)
     response.raise_for_status()
     data = response.json()
     if data.get("status") != "ok":
